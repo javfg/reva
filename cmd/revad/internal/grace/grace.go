@@ -256,6 +256,7 @@ type Server interface {
 
 // TrapSignals captures the OS signal.
 func (w *Watcher) TrapSignals() {
+	// TODO:(javfg) handle serverless services stop
 	signalCh := make(chan os.Signal, 1024)
 	signal.Notify(signalCh, syscall.SIGHUP, syscall.SIGINT, syscall.SIGQUIT)
 	for {
