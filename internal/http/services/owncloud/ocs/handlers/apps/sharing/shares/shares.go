@@ -45,6 +45,7 @@ import (
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
 	"github.com/cs3org/reva/pkg/appctx"
+	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/publicshare"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/share"
@@ -73,6 +74,8 @@ type Handler struct {
 	userIdentifierCache    *ttlcache.Cache
 	resourceInfoCache      cache.ResourceInfoCache
 	resourceInfoCacheTTL   time.Duration
+	notificationHelper     *notificationhelper.NotificationHelper
+	Log                    *zerolog.Logger
 }
 
 // we only cache the minimal set of data instead of the full user metadata.
@@ -97,12 +100,13 @@ func getCacheManager(c *config.Config) (cache.ResourceInfoCache, error) {
 }
 
 // Init initializes this and any contained handlers.
-func (h *Handler) Init(c *config.Config) {
+func (h *Handler) Init(c *config.Config, l *zerolog.Logger) {
 	h.gatewayAddr = c.GatewaySvc
 	h.storageRegistryAddr = c.StorageregistrySvc
 	h.publicURL = c.Config.Host
 	h.sharePrefix = c.SharePrefix
 	h.homeNamespace = c.HomeNamespace
+	h.Log = l
 
 	h.additionalInfoTemplate, _ = template.New("additionalInfo").Parse(c.AdditionalInfoAttribute)
 	h.resourceInfoCacheTTL = time.Second * time.Duration(c.ResourceInfoCacheTTL)
@@ -121,6 +125,21 @@ func (h *Handler) Init(c *config.Config) {
 			go h.startCacheWarmup(cwm)
 		}
 	}
+
+	nhc := notificationhelper.NotificationHelperConfig{
+		NatsAddress: c.NatsAddress,
+	}
+
+	h.notificationHelper = &notificationhelper.NotificationHelper{
+		Name: "ocs.shares",
+		Conf: &nhc,
+		Log:  l,
+	}
+
+	if err := h.notificationHelper.Start(c.NotificationTemplates, *h.Log); err != nil {
+		h.Log.Error().Err(err).Msgf("error initializing notification helper, notifications will be disabled")
+	}
+
 }
 
 func (h *Handler) startCacheWarmup(c cache.Warmup) {
@@ -1119,33 +1138,34 @@ func (h *Handler) getResourceInfo(ctx context.Context, client gateway.GatewayAPI
 	return pinfo, status, nil
 }
 
-func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) {
+func (h *Handler) createCs3Share(ctx context.Context, w http.ResponseWriter, r *http.Request, client gateway.GatewayAPIClient, req *collaboration.CreateShareRequest, info *provider.ResourceInfo) (*collaboration.ShareId, bool) {
 	createShareResponse, err := client.CreateShare(ctx, req)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error sending a grpc create share request", err)
-		return
+		return nil, false
 	}
 	if createShareResponse.Status.Code != rpc.Code_CODE_OK {
 		if createShareResponse.Status.Code == rpc.Code_CODE_NOT_FOUND {
 			response.WriteOCSError(w, r, response.MetaNotFound.StatusCode, "not found", nil)
-			return
+			return nil, false
 		}
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "grpc create share request failed", err)
-		return
+		return nil, false
 	}
 	s, err := conversions.CS3Share2ShareData(ctx, createShareResponse.Share)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error mapping share data", err)
-		return
+		return nil, false
 	}
 	err = h.addFileInfo(ctx, s, info)
 	if err != nil {
 		response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error adding fileinfo to share", err)
-		return
+		return nil, false
 	}
 	h.mapUserIds(ctx, client, s)
 
 	response.WriteOCSSuccess(w, r, s)
+	return createShareResponse.Share.Id, true
 }
 
 func mapState(state collaboration.ShareState) int {

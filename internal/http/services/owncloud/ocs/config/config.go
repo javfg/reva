@@ -43,6 +43,9 @@ type Config struct {
 	ResourceInfoCacheDrivers map[string]map[string]interface{} `mapstructure:"resource_info_caches"`
 	UserIdentifierCacheTTL   int                               `mapstructure:"user_identifier_cache_ttl"`
 	AllowedLanguages         []string                          `mapstructure:"allowed_languages"`
+	NatsAddress              string                            `mapstructure:"nats_address" docs:"The NATS server address."`
+	NatsStream               string                            `mapstructure:"nats_stream" docs:"The NATS stream name."`
+	NotificationTemplates    map[string]map[string]interface{} `mapstructure:"notification_templates"`
 }
 
 // Init sets sane defaults.

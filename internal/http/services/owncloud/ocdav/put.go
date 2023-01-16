@@ -20,19 +20,23 @@ package ocdav
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
+	linkv1beta1 "github.com/cs3org/go-cs3apis/cs3/sharing/link/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	typespb "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/storage/utils/chunking"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -343,6 +347,39 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	t := utils.TSToTime(newInfo.Mtime).UTC()
 	lastModifiedString := t.Format(time.RFC1123Z)
 	w.Header().Set(HeaderLastModified, lastModifiedString)
+
+	ls := sRes.Info.GetOpaque().Map["link-share"]
+	l := &linkv1beta1.PublicShare{}
+	switch ls.Decoder {
+	case "json":
+		_ = json.Unmarshal(ls.Value, l)
+	}
+
+	// todo: implement path showing for other providers
+	f := sRes.Info.GetOpaque().Map["eos"]
+	eosOpaque := make(map[string]interface{})
+	switch f.Decoder {
+	case "json":
+
+		_ = json.Unmarshal(f.Value, &eosOpaque)
+	}
+
+	eosPath := ""
+	_, shareFileName := filepath.Split(ref.Path)
+
+	if p, ok := eosOpaque["file"]; ok {
+		eosPath, shareFileName = filepath.Split(p.(string))
+	}
+
+	trg := &trigger.Trigger{
+		Ref: l.Id.OpaqueId,
+		TemplateData: map[string]interface{}{
+			"path":     eosPath,
+			"folder":   filepath.Base(eosPath),
+			"fileName": shareFileName,
+		},
+	}
+	s.notificationHelper.TriggerNotification(trg)
 
 	// file was new
 	if info == nil {

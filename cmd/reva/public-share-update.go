@@ -33,9 +33,12 @@ func publicShareUpdateCommand() *command {
 	cmd.Usage = func() string { return "Usage: public-share-update [-flags] <share_id>" }
 	rol := cmd.String("rol", "viewer", "the permission for the share (viewer or editor)")
 	description := cmd.String("description", "", "the description for the share")
+	notifyUploads := cmd.Bool("notify-uploads", false, "notify owner email when files are uploaded to the share")
 
 	cmd.ResetFlags = func() {
-		*rol, *description = "viewer", ""
+		*rol = "viewer"
+		*description = ""
+		*notifyUploads = false
 	}
 	cmd.Action = func(w ...io.Writer) error {
 		if cmd.NArg() < 1 {
@@ -92,6 +95,22 @@ func publicShareUpdateCommand() *command {
 				Update: &link.UpdatePublicShareRequest_Update{
 					Type:        link.UpdatePublicShareRequest_Update_TYPE_DESCRIPTION,
 					Description: *description,
+				},
+			})
+		}
+
+		if notifyUploads != nil {
+			updates = append(updates, &link.UpdatePublicShareRequest{
+				Ref: &link.PublicShareReference{
+					Spec: &link.PublicShareReference_Id{
+						Id: &link.PublicShareId{
+							OpaqueId: id,
+						},
+					},
+				},
+				Update: &link.UpdatePublicShareRequest_Update{
+					Type:          link.UpdatePublicShareRequest_Update_TYPE_NOTIFYUPLOADS,
+					NotifyUploads: *notifyUploads,
 				},
 			})
 		}

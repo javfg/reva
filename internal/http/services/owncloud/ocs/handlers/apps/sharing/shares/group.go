@@ -20,6 +20,8 @@ package shares
 
 import (
 	"net/http"
+	"path/filepath"
+	"strconv"
 
 	grouppb "github.com/cs3org/go-cs3apis/cs3/identity/group/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
@@ -28,6 +30,10 @@ import (
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/conversions"
 	"github.com/cs3org/reva/internal/http/services/owncloud/ocs/response"
+	"github.com/cs3org/reva/pkg/appctx"
+	ctxpkg "github.com/cs3org/reva/pkg/ctx"
+	"github.com/cs3org/reva/pkg/notification"
+	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 )
 
@@ -80,5 +86,33 @@ func (h *Handler) createGroupShare(w http.ResponseWriter, r *http.Request, statI
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	if shareId, ok := h.createCs3Share(ctx, w, r, c, createShareReq, statInfo); ok {
+		notify, _ := strconv.ParseBool(r.FormValue("notify"))
+		if notify {
+			user, ok := ctxpkg.ContextGetUser(ctx)
+			if ok {
+				logger := appctx.GetLogger(r.Context())
+
+				h.notificationHelper.TriggerNotification(&trigger.Trigger{
+					Notification: &notification.Notification{
+						TemplateName: "share-create-mail",
+						Ref:          shareId.OpaqueId,
+						Recipients:   []string{groupRes.Group.Mail},
+					},
+					Ref: shareId.OpaqueId,
+					TemplateData: map[string]interface{}{
+						"granteeDisplayName": groupRes.Group.DisplayName,
+						"granteeUserName":    groupRes.Group.GroupName,
+						"isGranteeGroup":     true,
+						"granterDisplayName": user.DisplayName,
+						"granterUserName":    user.Username,
+						"path":               statInfo.Path,
+						"isFolder":           statInfo.Type == provider.ResourceType_RESOURCE_TYPE_CONTAINER,
+						"base":               filepath.Base(statInfo.Path),
+					},
+				})
+				logger.Debug().Msgf("notification trigger %s created", shareId.OpaqueId)
+			}
+		}
+	}
 }

@@ -18,5 +18,8 @@
 
 package loader
 
-// Load core NATS services.
-// Add your own service here.
+import (
+	// Load core NATS services.
+	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
+	// Add your own service here.
+)

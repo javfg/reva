@@ -55,6 +55,10 @@ var (
 		rmCommand(),
 		moveCommand(),
 		mkdirCommand(),
+		notificationCreateCommand(),
+		notificationListCommand(),
+		notificationRemoveCommand(),
+		notificationTriggerCommand(),
 		ocmFindAcceptedUsersCommand(),
 		ocmInviteGenerateCommand(),
 		ocmInviteForwardCommand(),
@@ -132,6 +136,8 @@ func main() {
 	executor := Executor{Timeout: timeout}
 	completer := Completer{DisableArgPrompt: disableargprompt}
 	completer.init()
+
+	fmt.Printf("FLAGS %v", flag.Args())
 
 	if len(flag.Args()) > 0 {
 		executor.Execute(strings.Join(flag.Args(), " "))

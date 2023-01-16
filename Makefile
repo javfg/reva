@@ -83,7 +83,7 @@ tidy:
 
 .PHONY: build-revad
 build-revad: imports
-	go build -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
+	go build -gcflags "all=-N -l" -ldflags ${BUILD_FLAGS} -o ./cmd/revad/revad ./cmd/revad
 
 .PHONY: build-revad-cephfs
 build-revad-cephfs: imports
