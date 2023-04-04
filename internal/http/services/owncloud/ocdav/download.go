@@ -172,7 +172,7 @@ func (s *svc) downloadFile(ctx context.Context, w http.ResponseWriter, res *prov
 		return
 	}
 	d := downloader.NewDownloader(c)
-	r, err := d.Download(ctx, res.Path)
+	r, err := d.Download(ctx, res.Path, "")
 	if err != nil {
 		s.handleHttpError(w, err, log)
 		return

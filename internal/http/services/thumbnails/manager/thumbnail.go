@@ -99,7 +99,7 @@ func (t *Thumbnail) GetThumbnail(ctx context.Context, file, etag string, width, 
 	log.Debug().Msg("thumbnails: cache miss")
 
 	// the thumbnail was not found in the cache
-	r, err := t.downloader.Download(ctx, file)
+	r, err := t.downloader.Download(ctx, file, "")
 	if err != nil {
 		return nil, "", errors.Wrap(err, "thumbnails: error downloading file "+file)
 	}

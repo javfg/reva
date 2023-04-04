@@ -30,7 +30,6 @@ import (
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
 	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/pkg/appctx"
-	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/router"
 	"github.com/cs3org/reva/pkg/storage/utils/downloader"
 	rtrace "github.com/cs3org/reva/pkg/trace"
@@ -249,19 +248,22 @@ func (h *VersionsHandler) doDownload(w http.ResponseWriter, r *http.Request, s *
 		return
 	}
 
-	dir, fname := filepath.Split(resStat.GetInfo().Path)
+	fname := filepath.Base(resStat.Info.Path)
 
-	versionFile := filepath.Join(dir, ".sys.v#."+fname, key)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fname))
+	w.Header().Set("Content-Transfer-Encoding", "binary")
 
-	down := downloader.NewDownloader(client, rhttp.Context(ctx))
-	reader, err := down.Download(ctx, versionFile)
+	down := downloader.NewDownloader(client)
+	d, err := down.Download(ctx, resStat.Info.Path, key)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer reader.Close()
+	defer d.Close()
 
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fname))
-	w.Header().Set("Content-Transfer-Encoding", "binary")
-	io.Copy(w, reader)
+	_, err = io.Copy(w, d)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 }

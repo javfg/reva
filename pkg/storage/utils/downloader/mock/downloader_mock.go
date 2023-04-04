@@ -34,7 +34,11 @@ func NewDownloader() downloader.Downloader {
 	return &mockDownloader{}
 }
 
-// Download copies the content of a local file into the dst Writer
-func (m *mockDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	return os.Open(path)
+// Download copies the content of a local file into the dst Writer.
+func (m *mockDownloader) Download(ctx context.Context, path, _ string) (io.ReadCloser, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }

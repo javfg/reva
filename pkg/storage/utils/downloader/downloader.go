@@ -27,6 +27,7 @@ import (
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
 	rpc "github.com/cs3org/go-cs3apis/cs3/rpc/v1beta1"
 	provider "github.com/cs3org/go-cs3apis/cs3/storage/provider/v1beta1"
+	types "github.com/cs3org/go-cs3apis/cs3/types/v1beta1"
 	"github.com/cs3org/reva/internal/http/services/datagateway"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/rhttp"
@@ -35,7 +36,7 @@ import (
 // Downloader is the interface implemented by the objects that are able to
 // download a path into a destination Writer.
 type Downloader interface {
-	Download(context.Context, string) (io.ReadCloser, error)
+	Download(ctx context.Context, path, versionKey string) (io.ReadCloser, error)
 }
 
 type revaDownloader struct {
@@ -60,13 +61,24 @@ func getDownloadProtocol(protocols []*gateway.FileDownloadProtocol, prot string)
 	return nil, errtypes.InternalError(fmt.Sprintf("protocol %s not supported for downloading", prot))
 }
 
-// Download downloads a resource given the path. Is responsibility of the caller close the reader
-func (r *revaDownloader) Download(ctx context.Context, path string) (io.ReadCloser, error) {
-	downResp, err := r.gtw.InitiateFileDownload(ctx, &provider.InitiateFileDownloadRequest{
+// Download downloads a resource given the path to the dst Writer.
+func (r *revaDownloader) Download(ctx context.Context, path, versionKey string) (io.ReadCloser, error) {
+	req := &provider.InitiateFileDownloadRequest{
 		Ref: &provider.Reference{
 			Path: path,
 		},
-	})
+	}
+	if versionKey != "" {
+		req.Opaque = &types.Opaque{
+			Map: map[string]*types.OpaqueEntry{
+				"version_key": {
+					Decoder: "plain",
+					Value:   []byte(versionKey),
+				},
+			},
+		}
+	}
+	downResp, err := r.gtw.InitiateFileDownload(ctx, req)
 
 	switch {
 	case err != nil:
@@ -92,6 +104,7 @@ func (r *revaDownloader) Download(ctx context.Context, path string) (io.ReadClos
 	}
 
 	if httpRes.StatusCode != http.StatusOK {
+		defer httpRes.Body.Close()
 		switch httpRes.StatusCode {
 		case http.StatusNotFound:
 			return nil, errtypes.NotFound(path)
