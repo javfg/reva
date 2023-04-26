@@ -16,10 +16,12 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package notification
 
-import (
-	// Load core serverless services.
-	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
-	// Add your own service here.
-)
+func WithDefault(value, dflt string) string {
+	if value == "" {
+		return dflt
+	}
+
+	return value
+}

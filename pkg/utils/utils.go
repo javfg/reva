@@ -418,3 +418,13 @@ func UserIsLightweight(u *userpb.User) bool {
 	return u.Id.Type == userpb.UserType_USER_TYPE_FEDERATED ||
 		u.Id.Type == userpb.UserType_USER_TYPE_LIGHTWEIGHT
 }
+
+// WithDefault makes sure a string has a default value
+// useful for mapping info from config files
+func WithDefault(value, dflt string) string {
+	if value == "" {
+		return dflt
+	}
+
+	return value
+}

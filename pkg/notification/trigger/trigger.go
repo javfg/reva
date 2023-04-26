@@ -16,10 +16,28 @@
 // granted to it by virtue of its status as an Intergovernmental Organization
 // or submit itself to any jurisdiction.
 
-package loader
+package trigger
 
 import (
-	// Load core serverless services.
-	_ "github.com/cs3org/reva/internal/serverless/services/notifications"
-	// Add your own service here.
+	"github.com/cs3org/reva/pkg/notification"
 )
+
+type Trigger struct {
+	Notification *notification.Notification
+	Ref          string
+	Sender       string
+	TemplateData map[string]interface{}
+}
+
+func (t *Trigger) Send() error {
+	err := t.Notification.Send(t.Sender, t.TemplateData)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *Trigger) InitNotification(n notification.Notification) {
+	t.Notification = &n
+}
