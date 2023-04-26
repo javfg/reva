@@ -21,6 +21,7 @@ package shares
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"sync"
 
 	gateway "github.com/cs3org/go-cs3apis/cs3/gateway/v1beta1"
@@ -87,7 +88,15 @@ func (h *Handler) createUserShare(w http.ResponseWriter, r *http.Request, statIn
 		},
 	}
 
-	h.createCs3Share(ctx, w, r, c, createShareReq, statInfo)
+	if shareId, ok := h.createCs3Share(ctx, w, r, c, createShareReq, statInfo); ok {
+		notify, _ := strconv.ParseBool(r.FormValue("notify"))
+		if notify {
+			granter, ok := ctxpkg.ContextGetUser(ctx)
+			if ok {
+				h.SendShareNotification(shareId.OpaqueId, granter, userRes.User, statInfo)
+			}
+		}
+	}
 }
 
 func (h *Handler) isUserShare(r *http.Request, oid string) bool {
