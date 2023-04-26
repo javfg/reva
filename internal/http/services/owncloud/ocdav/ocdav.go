@@ -33,6 +33,7 @@ import (
 	"github.com/cs3org/reva/pkg/appctx"
 	ctxpkg "github.com/cs3org/reva/pkg/ctx"
 	"github.com/cs3org/reva/pkg/errtypes"
+	"github.com/cs3org/reva/pkg/notification/notificationhelper"
 	"github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rhttp"
 	"github.com/cs3org/reva/pkg/rhttp/global"
@@ -117,6 +118,8 @@ type Config struct {
 	FavoriteStorageDriver  string                            `mapstructure:"favorite_storage_driver"`
 	FavoriteStorageDrivers map[string]map[string]interface{} `mapstructure:"favorite_storage_drivers"`
 	PublicLinkDownload     *ConfigPublicLinkDownload         `mapstructure:"publiclink_download"`
+	NatsAddress            string                            `mapstructure:"nats_address" docs:"The NATS server address."`
+	NatsToken              string                            `mapstructure:"nats_token" docs:";The token to authenticate against the NATS server"`
 }
 
 func (c *Config) init() {
@@ -133,11 +136,12 @@ func (c *Config) init() {
 }
 
 type svc struct {
-	c                *Config
-	webDavHandler    *WebDavHandler
-	davHandler       *DavHandler
-	favoritesManager favorite.Manager
-	client           *http.Client
+	c                  *Config
+	webDavHandler      *WebDavHandler
+	davHandler         *DavHandler
+	favoritesManager   favorite.Manager
+	client             *http.Client
+	notificationHelper *notificationhelper.NotificationHelper
 }
 
 func getFavoritesManager(c *Config) (favorite.Manager, error) {
@@ -161,6 +165,11 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 		return nil, err
 	}
 
+	nhc := notificationhelper.NotificationHelperConfig{
+		NatsAddress: conf.NatsAddress,
+		NatsToken:   conf.NatsToken,
+	}
+
 	s := &svc{
 		c:             conf,
 		webDavHandler: new(WebDavHandler),
@@ -170,13 +179,22 @@ func New(m map[string]interface{}, log *zerolog.Logger) (global.Service, error) 
 			rhttp.Insecure(conf.Insecure),
 		),
 		favoritesManager: fm,
+		notificationHelper: &notificationhelper.NotificationHelper{
+			Name: "ocdav",
+			Conf: &nhc,
+			Log:  log,
+		},
 	}
+
 	// initialize handlers and set default configs
 	if err := s.webDavHandler.init(conf.WebdavNamespace, true); err != nil {
 		return nil, err
 	}
 	if err := s.davHandler.init(conf); err != nil {
 		return nil, err
+	}
+	if err := s.notificationHelper.Start(nil, *log); err != nil {
+		log.Error().Err(err).Msgf("error initializing notification helper, notifications will be disabled")
 	}
 	return s, nil
 }
@@ -186,6 +204,7 @@ func (s *svc) Prefix() string {
 }
 
 func (s *svc) Close() error {
+	s.notificationHelper.Stop()
 	return nil
 }
 
