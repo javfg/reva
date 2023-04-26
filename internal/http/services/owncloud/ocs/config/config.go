@@ -45,6 +45,10 @@ type Config struct {
 	AllowedLanguages         []string                          `mapstructure:"allowed_languages"`
 	OCMMountPoint            string                            `mapstructure:"ocm_mount_point"`
 	ListOCMShares            bool                              `mapstructure:"list_ocm_shares"`
+	NatsAddress              string                            `mapstructure:"nats_address" docs:"The NATS server address."`
+	NatsStream               string                            `mapstructure:"nats_stream" docs:"The NATS stream name."`
+	NatsToken                string                            `mapstructure:"nats_token" docs:";The token to authenticate against the NATS server"`
+	NotificationTemplates    map[string]map[string]interface{} `mapstructure:"notification_templates"`
 }
 
 // Init sets sane defaults.
