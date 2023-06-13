@@ -62,7 +62,7 @@ func init() {
 	registry.Register("cephfs", New)
 }
 
-// New returns an implementation to of the storage.FS interface that talk to
+// New returns an implementation to of the storage.FS interface that talks to
 // a ceph filesystem.
 func New(m map[string]interface{}) (fs storage.FS, err error) {
 	c := &Options{}
@@ -83,9 +83,12 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 	}
 
 	for _, dir := range []string{c.ShadowFolder, c.UploadFolder} {
-		err = adminConn.adminMount.MakeDir(dir, dirPermFull)
-		if err != nil && err.Error() != errFileExists {
-			return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
+		_, err := adminConn.adminMount.Statx(dir, cephfs2.StatxMask(cephfs2.StatxIno), 0)
+		if err != nil {
+			err = adminConn.adminMount.MakeDir(dir, dirPermFull)
+			if err != nil && err.Error() != errFileExists {
+				return nil, errors.New("cephfs: can't initialise system dir " + dir + ":" + err.Error())
+			}
 		}
 	}
 
@@ -94,6 +97,16 @@ func New(m map[string]interface{}) (fs storage.FS, err error) {
 		conn:      cache,
 		adminConn: adminConn,
 	}, nil
+}
+
+func (fs *cephfs) Shutdown(ctx context.Context) (err error) {
+	ctx.Done()
+	fs.conn.clearCache()
+	_ = fs.adminConn.adminMount.Unmount()
+	_ = fs.adminConn.adminMount.Release()
+	fs.adminConn.radosConn.Shutdown()
+
+	return
 }
 
 func (fs *cephfs) GetHome(ctx context.Context) (string, error) {
@@ -513,16 +526,6 @@ func (fs *cephfs) CreateReference(ctx context.Context, path string, targetURI *u
 	})
 
 	return getRevaError(err)
-}
-
-func (fs *cephfs) Shutdown(ctx context.Context) (err error) {
-	ctx.Done()
-	fs.conn.clearCache()
-	_ = fs.adminConn.adminMount.Unmount()
-	_ = fs.adminConn.adminMount.Release()
-	fs.adminConn.radosConn.Shutdown()
-
-	return
 }
 
 func (fs *cephfs) SetArbitraryMetadata(ctx context.Context, ref *provider.Reference, md *provider.ArbitraryMetadata) (err error) {
