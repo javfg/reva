@@ -343,7 +343,7 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if sRes.Info.GetOpaque() != nil {
 		m = sRes.Info.GetOpaque().Map
 	}
-
+	// TODO DANIEL CHANGE SO THAT IT TRIGGERS FOR ALL FILES
 	if ls, ok := m["link-share"]; ok {
 		l := &linkv1beta1.PublicShare{}
 		switch ls.Decoder {
