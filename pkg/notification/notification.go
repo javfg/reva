@@ -40,6 +40,8 @@ type Manager interface {
 	GetNotification(ref string) (*Notification, error)
 	// DeleteNotification deletes a notifcation.
 	DeleteNotification(ref string) error
+	// GetNotificationPreference queries the database whether a specific user has notifications disabled or enabled
+	GetNotificationPreference(opaqueId string) (bool, error)
 }
 
 // NotFoundError is the error returned when a notification does not exist.
@@ -77,7 +79,6 @@ func (n *Notification) Send(sender string, templateData map[string]interface{}) 
 	}
 
 	for _, recipient := range n.Recipients {
-		// TODO DANIEL QUERY THE DB FOR THE USER WHO IS THE RECEPIENT
 		err := n.Template.Handler.Send(sender, recipient, subject, body)
 		if err != nil {
 			return err

@@ -21,6 +21,7 @@ package sql
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/manager/registry"
@@ -161,6 +162,44 @@ func (m *mgr) GetNotification(ref string) (*notification.Notification, error) {
 	}
 
 	return &n, nil
+}
+
+func (m *mgr) GetNotificationPreference(opaqueId string) (bool, error) {
+	query := `
+	SELECT n.configvalue
+	FROM oc_preferences AS n
+	WHERE n.userid = ?
+	AND n.appid = 'disableNotificationsCore'
+	AND n.configkey = 'disableNotifications'
+	`
+	rows, err := m.db.Query(query, opaqueId)
+	if err != nil {
+		return false, err
+	}
+
+	defer rows.Close()
+
+	count := 0
+	var configvalues []bool
+
+	for rows.Next() {
+		var configvalue string
+		err := rows.Scan(&configvalue)
+		if err != nil {
+			return false, err
+		}
+		value, err := strconv.ParseBool(configvalue)
+		configvalues = append(configvalues, value)
+		count++
+	}
+	if err = rows.Err(); err != nil {
+		return false, err
+	}
+	if count == 0 {
+		return false, nil
+	}
+
+	return configvalues[0], nil
 }
 
 // DeleteNotification deletes a notification.

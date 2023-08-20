@@ -24,8 +24,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
-
+	userpb "github.com/cs3org/go-cs3apis/cs3/identity/user/v1beta1"
 	"github.com/cs3org/reva/pkg/errtypes"
 	"github.com/cs3org/reva/pkg/notification"
 	"github.com/cs3org/reva/pkg/notification/handler"
@@ -35,10 +34,12 @@ import (
 	templateRegistry "github.com/cs3org/reva/pkg/notification/template/registry"
 	"github.com/cs3org/reva/pkg/notification/trigger"
 	"github.com/cs3org/reva/pkg/notification/utils"
+	pool "github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rserverless"
 	"github.com/cs3org/reva/pkg/utils/accumulator"
 	"github.com/mitchellh/mapstructure"
 	"github.com/nats-io/nats.go"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 )
 
@@ -51,6 +52,7 @@ type config struct {
 	GroupingMaxSize  int                               `mapstructure:"grouping_max_size" docs:"100;Maximum number of notifications to group"`
 	StorageDriver    string                            `mapstructure:"storage_driver" docs:"mysql;The driver used to store notifications"`
 	StorageDrivers   map[string]map[string]interface{} `mapstructure:"storage_drivers"`
+	GatewayAddress   string                            `mapstructure:"gatewaysvc"`
 }
 
 func defaultConfig() *config {
@@ -344,9 +346,10 @@ func (s *svc) notificationSendCallback(ts []trigger.Trigger) {
 	const itemCount = 10
 	var tr trigger.Trigger
 
+	s.log.Info().Msgf("preparing notification for trigger %s", tr.Ref)
+
 	if len(ts) == 1 {
 		tr = ts[0]
-		s.log.Info().Msgf("sending single notification for trigger %s", tr.Ref)
 	} else {
 		moreCount := len(ts) - itemCount
 		if moreCount < 0 {
@@ -397,7 +400,38 @@ func (s *svc) notificationSendCallback(ts []trigger.Trigger) {
 	// destroy old accumulator
 	s.accumulators[tr.Ref] = nil
 
-	if err := tr.Send(); err != nil {
-		s.log.Error().Err(err).Msgf("notification send failed")
+	var filtered_recipients []string
+	for _, recipient_email := range tr.Notification.Recipients {
+		ctx := context.Background()
+		c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewayAddress))
+		if err != nil {
+			s.log.Error().Err(err).Msg("error getting grpc gateway client")
+		}
+
+		recipient, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
+			Claim:                  "mail",
+			Value:                  recipient_email,
+			SkipFetchingUserGroups: true,
+		})
+		if err != nil {
+			s.log.Error().Err(err).Msgf("getting user by email failed for email %s", recipient_email)
+		}
+
+		enabled_notifications, err := s.nm.GetNotificationPreference(recipient.User.Id.OpaqueId)
+		if err != nil {
+			fmt.Print("There was an error getting the notification preference")
+			s.log.Error().Err(err).Msgf("getting notification preference for user failed, opaque_id %s", recipient.User.Id.OpaqueId)
+		}
+
+		if !enabled_notifications {
+			filtered_recipients = append(filtered_recipients, recipient_email)
+		}
+	}
+	tr.Notification.Recipients = filtered_recipients
+
+	if err := tr.Notification.CheckNotification(); err == nil {
+		if err := tr.Send(); err != nil {
+			s.log.Error().Err(err).Msgf("notification send failed")
+		}
 	}
 }

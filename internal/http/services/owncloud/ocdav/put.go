@@ -223,19 +223,19 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Opaque: &typespb.Opaque{Map: opaqueMap},
 	}
 
-       dirPart, filePart := filepath.Split(ref.Path)
-       dirParts := strings.Split(dirPart, "/")
-       folder := dirParts[len(dirParts)-1]
+	dirPart, filePart := filepath.Split(ref.Path)
+	dirParts := strings.Split(dirPart, "/")
+	folder := dirParts[len(dirParts)-1]
 
-       trg := &trigger.Trigger{
-               Ref: "any",
-               TemplateData: map[string]interface{}{
-                       "path":     ref.Path,
-                       "folder":   folder,
-                       "fileName": filePart,
-               },
-       }
-       s.notificationHelper.TriggerNotification(trg)
+	trg := &trigger.Trigger{
+		Ref: "any",
+		TemplateData: map[string]interface{}{
+			"path":     ref.Path,
+			"folder":   folder,
+			"fileName": filePart,
+		},
+	}
+	s.notificationHelper.TriggerNotification(trg)
 
 	// where to upload the file?
 	uRes, err := client.InitiateFileUpload(ctx, uReq)
@@ -343,7 +343,6 @@ func (s *svc) handlePut(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if sRes.Info.GetOpaque() != nil {
 		m = sRes.Info.GetOpaque().Map
 	}
-	// TODO DANIEL CHANGE SO THAT IT TRIGGERS FOR ALL FILES
 	if ls, ok := m["link-share"]; ok {
 		l := &linkv1beta1.PublicShare{}
 		switch ls.Decoder {

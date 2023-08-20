@@ -232,6 +232,7 @@ nats_trigger_subject = "reva-notifications-trigger"
 storage_driver = "sql"
 grouping_interval = 5
 grouping_max_size = 10
+gatewaysvc = "localhost:20000"
 
 [serverless.services.notifications.storage_drivers.sql]
 db_username = "root"
