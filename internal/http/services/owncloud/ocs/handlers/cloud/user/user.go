@@ -109,7 +109,7 @@ func (h *Handler) getNotif(ctx context.Context) string {
 	})
 
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-		return ""
+		return err.Error()
 	}
 	return res.GetVal()
 }

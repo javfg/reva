@@ -36,6 +36,7 @@ import (
 	"github.com/cs3org/reva/pkg/notification/utils"
 	pool "github.com/cs3org/reva/pkg/rgrpc/todo/pool"
 	"github.com/cs3org/reva/pkg/rserverless"
+	"github.com/cs3org/reva/pkg/sharedconf"
 	"github.com/cs3org/reva/pkg/utils/accumulator"
 	"github.com/mitchellh/mapstructure"
 	"github.com/nats-io/nats.go"
@@ -400,34 +401,34 @@ func (s *svc) notificationSendCallback(ts []trigger.Trigger) {
 	// destroy old accumulator
 	s.accumulators[tr.Ref] = nil
 
-	var filtered_recipients []string
-	for _, recipient_email := range tr.Notification.Recipients {
+	var filteredRecipients []string
+	for _, recipientEmail := range tr.Notification.Recipients {
 		ctx := context.Background()
-		c, err := pool.GetGatewayServiceClient(pool.Endpoint(s.conf.GatewayAddress))
+		c, err := pool.GetGatewayServiceClient(pool.Endpoint(sharedconf.GetGatewaySVC(s.conf.GatewayAddress)))
 		if err != nil {
 			s.log.Error().Err(err).Msg("error getting grpc gateway client")
 		}
 
 		recipient, err := c.GetUserByClaim(ctx, &userpb.GetUserByClaimRequest{
 			Claim:                  "mail",
-			Value:                  recipient_email,
+			Value:                  recipientEmail,
 			SkipFetchingUserGroups: true,
 		})
 		if err != nil {
-			s.log.Error().Err(err).Msgf("getting user by email failed for email %s", recipient_email)
+			s.log.Error().Err(err).Msgf("getting user by email failed for email %s", recipientEmail)
 		}
 
-		enabled_notifications, err := s.nm.GetNotificationPreference(recipient.User.Id.OpaqueId)
+		enabledNotifications, err := s.nm.GetNotificationPreference(recipient.User.Id.OpaqueId)
 		if err != nil {
 			fmt.Print("There was an error getting the notification preference")
 			s.log.Error().Err(err).Msgf("getting notification preference for user failed, opaque_id %s", recipient.User.Id.OpaqueId)
 		}
 
-		if !enabled_notifications {
-			filtered_recipients = append(filtered_recipients, recipient_email)
+		if !enabledNotifications {
+			filteredRecipients = append(filteredRecipients, recipientEmail)
 		}
 	}
-	tr.Notification.Recipients = filtered_recipients
+	tr.Notification.Recipients = filteredRecipients
 
 	if err := tr.Notification.CheckNotification(); err == nil {
 		if err := tr.Send(); err != nil {
