@@ -70,12 +70,12 @@ func (h *Handler) GetSelf(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.WriteOCSSuccess(w, r, &User{
-		ID:          u.Username,
-		DisplayName: u.DisplayName,
-		Email:       u.Mail,
-		UserType:    conversions.UserTypeString(u.Id.Type),
-		Language:    h.getLanguage(ctx),
-		Notif:       h.getNotif(ctx),
+		ID:                   u.Username,
+		DisplayName:          u.DisplayName,
+		Email:                u.Mail,
+		UserType:             conversions.UserTypeString(u.Id.Type),
+		Language:             h.getLanguage(ctx),
+		DisableNotifications: h.getNotification(ctx),
 	})
 }
 
@@ -96,10 +96,10 @@ func (h *Handler) getLanguage(ctx context.Context) string {
 	return res.GetVal()
 }
 
-func (h *Handler) getNotif(ctx context.Context) string {
+func (h *Handler) getNotification(ctx context.Context) string {
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
-		return ""
+		return err.Error()
 	}
 	res, err := gw.GetKey(ctx, &preferences.GetKeyRequest{
 		Key: &preferences.PreferenceKey{
@@ -115,8 +115,8 @@ func (h *Handler) getNotif(ctx context.Context) string {
 }
 
 type updateSelfRequest struct {
-	Language     string `json:"language"`
-	Notification bool   `json:"disableNotifications,omitempty"`
+	Language               string `json:"language"`
+	NotificationPreference bool   `json:"disableNotifications,omitempty"`
 }
 
 // UpdateSelf handles PATCH requests on /cloud/user.
@@ -137,14 +137,14 @@ func (h *Handler) UpdateSelf(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if err := h.updateNotificationSetting(ctx, req.Notification); err != nil {
+		if err := h.updateNotificationSetting(ctx, req.NotificationPreference); err != nil {
 			response.WriteOCSError(w, r, response.MetaServerError.StatusCode, "error applying notification setting", err)
 			return
 		}
 	}
 }
 
-func (h *Handler) updateNotificationSetting(ctx context.Context, notification bool) error {
+func (h *Handler) updateNotificationSetting(ctx context.Context, notificationPreference bool) error {
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
 		return err
@@ -154,7 +154,7 @@ func (h *Handler) updateNotificationSetting(ctx context.Context, notification bo
 			Namespace: notificationNamespace,
 			Key:       notificationKey,
 		},
-		Val: strconv.FormatBool(notification),
+		Val: strconv.FormatBool(notificationPreference),
 	})
 	if err != nil {
 		return err
@@ -206,10 +206,10 @@ func parseUpdateSelfRequest(r *http.Request) (updateSelfRequest, error) {
 // User holds user data.
 type User struct {
 	// TODO needs better naming, clarify if we need a userid, a username or both
-	ID          string `json:"id" xml:"id"`
-	DisplayName string `json:"display-name" xml:"display-name"`
-	Email       string `json:"email" xml:"email"`
-	UserType    string `json:"user-type" xml:"user-type"`
-	Language    string `json:"language,omitempty" xml:"language,omitempty"`
-	Notif       string `json:"disableNotifications,omitempty" xml:"disableNotifications,omitempty"`
+	ID                   string `json:"id" xml:"id"`
+	DisplayName          string `json:"display-name" xml:"display-name"`
+	Email                string `json:"email" xml:"email"`
+	UserType             string `json:"user-type" xml:"user-type"`
+	Language             string `json:"language,omitempty" xml:"language,omitempty"`
+	DisableNotifications string `json:"disableNotifications,omitempty" xml:"disableNotifications,omitempty"`
 }
