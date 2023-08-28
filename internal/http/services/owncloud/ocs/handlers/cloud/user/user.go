@@ -96,10 +96,10 @@ func (h *Handler) getLanguage(ctx context.Context) string {
 	return res.GetVal()
 }
 
-func (h *Handler) getNotification(ctx context.Context) string {
+func (h *Handler) getNotification(ctx context.Context) bool {
 	gw, err := pool.GetGatewayServiceClient(pool.Endpoint(h.gatewayAddr))
 	if err != nil {
-		return err.Error()
+		return false
 	}
 	res, err := gw.GetKey(ctx, &preferences.GetKeyRequest{
 		Key: &preferences.PreferenceKey{
@@ -109,9 +109,15 @@ func (h *Handler) getNotification(ctx context.Context) string {
 	})
 
 	if err != nil || res.Status.Code != rpc.Code_CODE_OK {
-		return err.Error()
+		return false
 	}
-	return res.GetVal()
+
+	value, err := strconv.ParseBool(res.GetVal())
+	if err != nil {
+		return false
+	}
+
+	return value
 }
 
 type updateSelfRequest struct {
@@ -211,5 +217,5 @@ type User struct {
 	Email                string `json:"email" xml:"email"`
 	UserType             string `json:"user-type" xml:"user-type"`
 	Language             string `json:"language,omitempty" xml:"language,omitempty"`
-	DisableNotifications string `json:"disableNotifications,omitempty" xml:"disableNotifications,omitempty"`
+	DisableNotifications bool   `json:"disableNotifications,omitempty" xml:"disableNotifications,omitempty"`
 }
